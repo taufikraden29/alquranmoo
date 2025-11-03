@@ -740,6 +740,38 @@ export default function PrayerScheduleApp() {
     }
   }, [adzanSettings.volume]);
 
+  // Function to test notification
+  const testNotification = useCallback(() => {
+    if (!("Notification" in window)) {
+      setError("Browser Anda tidak mendukung notifikasi.");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      setError("Izin notifikasi ditolak. Harap aktifkan di pengaturan browser.");
+      return;
+    }
+
+    if (Notification.permission === "default") {
+      // Request permission first, then show notification
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          new Notification("Test Notifikasi", {
+            body: "Ini adalah notifikasi percobaan untuk memastikan notifikasi berfungsi dengan benar.",
+            icon: "/favicon.ico",
+            tag: "test-notification"
+          });
+        }
+      });
+    } else if (Notification.permission === "granted") {
+      new Notification("Test Notifikasi", {
+        body: "Ini adalah notifikasi percobaan untuk memastikan notifikasi berfungsi dengan benar.",
+        icon: "/favicon.ico",
+        tag: "test-notification"
+      });
+    }
+  }, []);
+
   // Format prayer times untuk display
   const prayerTimesDisplay = useMemo(() => {
     if (!schedule) return [];
@@ -924,6 +956,16 @@ export default function PrayerScheduleApp() {
                 <span className="text-slate-500 dark:text-slate-500 text-sm w-8">{Math.round(adzanSettings.volume * 100)}%</span>
               </div>
             )}
+            
+            {/* Test Notification Button */}
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={testNotification}
+                className="w-full py-2 px-4 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md"
+              >
+                Test Notifikasi
+              </button>
+            </div>
           </div>
         </motion.div>
       )}
