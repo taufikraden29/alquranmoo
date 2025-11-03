@@ -111,6 +111,9 @@ export default function PrayerScheduleApp() {
     selectedAdzan: 'makkah', // Default to Makkah
     volume: 0.8
   });
+  
+  // Timezone settings
+  const [selectedTimezone, setSelectedTimezone] = useState('wib'); // Default to WIB
 
   // 🚀 Register Service Worker
   useEffect(() => {
@@ -135,6 +138,12 @@ export default function PrayerScheduleApp() {
       root.removeAttribute('data-theme');
       document.body.classList.remove('dark');
     }
+  }, []);
+
+  // 🕒 Load timezone from localStorage on mount
+  useEffect(() => {
+    const savedTimezone = localStorage.getItem('timezone') || 'wib';
+    setSelectedTimezone(savedTimezone);
   }, []);
 
   const toggleTheme = useCallback(() => {
@@ -378,17 +387,17 @@ export default function PrayerScheduleApp() {
     checkNotificationPermission();
   }, []);
 
-  // 🕒 Real-time Clock (WIB)
+  // 🕒 Real-time Clock with timezone support
   useEffect(() => {
     const updateTime = () => {
-      const timeString = dateUtils.getTimeInWIB();
+      const timeString = dateUtils.getTimeByTimezone(selectedTimezone);
       setCurrentTime(timeString);
     };
 
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedTimezone]);
 
   // 🏙️ Ambil daftar kota dengan caching
   const fetchCities = useCallback(async () => {
@@ -519,7 +528,7 @@ export default function PrayerScheduleApp() {
         navigator.serviceWorker.ready.then((reg) => {
           reg.showNotification(title, {
             body,
-            icon: "/favicon.ico",
+            icon: "/icon.png",
             tag,
             renotify: true,
           });
@@ -563,7 +572,7 @@ export default function PrayerScheduleApp() {
     }
 
     localStorage.setItem("prayerTimeouts", JSON.stringify(newTimeouts));
-  }, [notificationSettings]);
+  }, [notificationSettings, adzanSettings]);
 
 
   // 🕋 Tentukan shalat berikutnya
@@ -675,9 +684,17 @@ export default function PrayerScheduleApp() {
 
   // Update Adzan settings
   const updateAdzanSettings = useCallback((settings) => {
+    // If Adzan is being enabled/disabled, update the prayer notifications
+    if (adzanSettings.enabled !== settings.enabled) {
+      // Re-setup notifications to apply the new Adzan setting
+      if (schedule && cityName) {
+        setupPrayerNotifications(schedule, cityName);
+      }
+    }
+    
     setAdzanSettings(settings);
     localStorage.setItem('adzanSettings', JSON.stringify(settings));
-  }, []);
+  }, [adzanSettings.enabled, cityName, schedule, setupPrayerNotifications]);
 
   // Function to play Adzan
   const playAdzan = useCallback((adzanType) => {
@@ -706,7 +723,7 @@ export default function PrayerScheduleApp() {
           if (Notification.permission === "granted") {
             new Notification("Waktu Shalat!", {
               body: "Sudah waktunya shalat, saatnya Adzan",
-              icon: "/favicon.ico",
+              icon: "/icon.png",
               tag: "adzan-fallback"
             });
           }
@@ -719,7 +736,7 @@ export default function PrayerScheduleApp() {
         if (Notification.permission === "granted") {
           new Notification("Waktu Shalat!", {
             body: "Sudah waktunya shalat",
-            icon: "/favicon.ico",
+            icon: "/icon.png",
             tag: "adzan-fallback"
           });
         }
@@ -733,15 +750,41 @@ export default function PrayerScheduleApp() {
       if (Notification.permission === "granted" && "Notification" in window) {
         new Notification("Waktu Shalat!", {
           body: "Sudah waktunya shalat",
-          icon: "/favicon.ico", 
+          icon: "/icon.png", 
           tag: "adzan-fallback"
         });
       }
     }
   }, [adzanSettings.volume]);
 
-  // Function to test notification
-  const testNotification = useCallback(() => {
+  // Function to test notification with audio feedback
+  const testNotification = useCallback(async () => {
+    // Play audio feedback using Web Audio API (works even without notification permission)
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 800; // 800 Hz
+      gainNode.gain.value = 0.3;
+      
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+      }, 500); // 0.5 second beep
+      
+      // Resume the audio context if suspended (important for Chrome)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+    } catch (audioError) {
+      console.error("Error with audio feedback:", audioError);
+    }
+
     if (!("Notification" in window)) {
       setError("Browser Anda tidak mendukung notifikasi.");
       return;
@@ -752,23 +795,35 @@ export default function PrayerScheduleApp() {
       return;
     }
 
-    if (Notification.permission === "default") {
-      // Request permission first, then show notification
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("Test Notifikasi", {
-            body: "Ini adalah notifikasi percobaan untuk memastikan notifikasi berfungsi dengan benar.",
-            icon: "/favicon.ico",
-            tag: "test-notification"
-          });
-        }
-      });
-    } else if (Notification.permission === "granted") {
-      new Notification("Test Notifikasi", {
-        body: "Ini adalah notifikasi percobaan untuk memastikan notifikasi berfungsi dengan benar.",
-        icon: "/favicon.ico",
-        tag: "test-notification"
-      });
+    let permission = Notification.permission;
+    
+    if (permission === "default") {
+      permission = await Notification.requestPermission();
+    }
+
+    if (permission === "granted") {
+      try {
+        // Create notification
+        const notification = new Notification("Test Notifikasi", {
+          body: "Ini adalah notifikasi percobaan untuk memastikan notifikasi berfungsi dengan benar.",
+          icon: "/icon.png",
+          tag: "test-notification",
+          requireInteraction: false, // Auto-dismiss after some time
+          silent: false // Ensure notification is not silent
+        });
+
+        // Optional: Add click handler for notification
+        notification.onclick = () => {
+          console.log("Test notification clicked");
+          window.focus();
+        };
+      } catch (error) {
+        console.error("Error showing notification:", error);
+        // Still show success as audio played
+        console.log("Notifikasi gagal ditampilkan, tetapi suara telah diputar sebagai feedback");
+      }
+    } else {
+      setError("Izin notifikasi tidak diberikan. Silakan izinkan notifikasi untuk aplikasi ini.");
     }
   }, []);
 
@@ -867,6 +922,22 @@ export default function PrayerScheduleApp() {
                 <option value="small">{t('Small')}</option>
                 <option value="medium">{t('Medium')}</option>
                 <option value="large">{t('Large')}</option>
+              </select>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-slate-700 dark:text-slate-300">Zona Waktu</span>
+              <select
+                value={selectedTimezone}
+                onChange={(e) => {
+                  setSelectedTimezone(e.target.value);
+                  localStorage.setItem('timezone', e.target.value);
+                }}
+                className="bg-white/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300"
+              >
+                <option value="wib">WIB (UTC+7)</option>
+                <option value="wita">WITA (UTC+8)</option>
+                <option value="wit">WIT (UTC+9)</option>
               </select>
             </div>
             

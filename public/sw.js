@@ -13,3 +13,14 @@ self.addEventListener("push", (event) => {
     };
     event.waitUntil(self.registration.showNotification(title, options));
 });
+
+// Handle notification clicks
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    event.waitUntil(
+        clients.openWindow(event.notification.data.url || "/")
+    );
+});
+
+// For direct showNotification calls from the main app
+// The service worker is already set up to handle showNotification calls from the main app

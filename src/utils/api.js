@@ -58,15 +58,35 @@ export const dateUtils = {
     return dateUtils.formatDate(new Date());
   },
 
-  // Get time in WIB (UTC+7)
-  getTimeInWIB: () => {
+  // Get time based on selected timezone
+  getTimeByTimezone: (timezone = 'wib') => {
     const now = new Date();
+    let timeZoneId = 'Asia/Jakarta'; // Default to WIB (UTC+7)
+    
+    switch (timezone.toLowerCase()) {
+      case 'wita':
+        timeZoneId = 'Asia/Makassar'; // WITA (UTC+8)
+        break;
+      case 'wit':
+        timeZoneId = 'Asia/Jayapura'; // WIT (UTC+9)
+        break;
+      case 'wib':
+      default:
+        timeZoneId = 'Asia/Jakarta'; // WIB (UTC+7)
+        break;
+    }
+    
     return now.toLocaleTimeString('id-ID', {
-      timeZone: 'Asia/Jakarta',
+      timeZone: timeZoneId,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     });
+  },
+
+  // Legacy function for backward compatibility
+  getTimeInWIB: () => {
+    return dateUtils.getTimeByTimezone('wib');
   }
 };
 
