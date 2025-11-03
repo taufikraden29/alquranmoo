@@ -102,6 +102,10 @@ export default function PrayerScheduleApp() {
   const [recentReadings, setRecentReadings] = useState([]);
   const [bookmarkedSurahs, setBookmarkedSurahs] = useState(new Set());
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(null);
+  const [notificationSettings, setNotificationSettings] = useState({
+    enabled: true,
+    timeBefore: [5, 15] // Minutes before prayer time
+  });
 
   // 🚀 Register Service Worker
   useEffect(() => {
@@ -142,6 +146,14 @@ export default function PrayerScheduleApp() {
       document.body.classList.remove('dark');
     }
   }, [theme]);
+  
+  // Load notification settings from localStorage
+  useEffect(() => {
+    const savedSettings = JSON.parse(localStorage.getItem('notificationSettings') || 'null');
+    if (savedSettings) {
+      setNotificationSettings(savedSettings);
+    }
+  }, []);
   
   // Load recent readings and bookmarks from localStorage
   useEffect(() => {
@@ -266,6 +278,7 @@ export default function PrayerScheduleApp() {
         'from recent readings?': 'dari bacaan terbaru?',
         'Cancel': 'Batal',
         'Delete': 'Hapus',
+        'min': 'menit',
       },
       en: {
         'Jadwal Shalat': 'Prayer Schedule',
@@ -308,6 +321,7 @@ export default function PrayerScheduleApp() {
         'from recent readings?': 'from recent readings?',
         'Cancel': 'Cancel',
         'Delete': 'Delete',
+        'min': 'min',
       }
     };
     
@@ -485,19 +499,21 @@ export default function PrayerScheduleApp() {
         });
       };
 
-      // 10 menit sebelum
-      const notifyTime10 = new Date(prayerTime.getTime() - 10 * 60 * 1000);
-      const delay10 = notifyTime10 - new Date();
+      // Setup configurable time before notifications
+      for (const minutesBefore of notificationSettings.timeBefore) {
+        const notifyTime = new Date(prayerTime.getTime() - minutesBefore * 60 * 1000);
+        const delay = notifyTime - new Date();
 
-      if (delay10 > 0) {
-        const id = setTimeout(() => {
-          triggerNotification(
-            `🕌 ${name} Akan Tiba`,
-            `${emoji} Waktu ${name} di ${cityName} 10 menit lagi (${time})`,
-            `prayer-${key}-10min`
-          );
-        }, delay10);
-        newTimeouts.push(id);
+        if (delay > 0) {
+          const id = setTimeout(() => {
+            triggerNotification(
+              `🕌 ${name} Akan Tiba`,
+              `${emoji} Waktu ${name} di ${cityName} ${minutesBefore} menit lagi (${time})`,
+              `prayer-${key}-${minutesBefore}min`
+            );
+          }, delay);
+          newTimeouts.push(id);
+        }
       }
 
       // Saat waktu shalat
@@ -515,7 +531,7 @@ export default function PrayerScheduleApp() {
     }
 
     localStorage.setItem("prayerTimeouts", JSON.stringify(newTimeouts));
-  }, []);
+  }, [notificationSettings]);
 
 
   // 🕋 Tentukan shalat berikutnya
@@ -619,6 +635,12 @@ export default function PrayerScheduleApp() {
     setNotificationEnabled(!notificationEnabled);
   }, [notificationEnabled]);
 
+  // Update notification settings
+  const updateNotificationSettings = useCallback((settings) => {
+    setNotificationSettings(settings);
+    localStorage.setItem('notificationSettings', JSON.stringify(settings));
+  }, []);
+
   // Format prayer times untuk display
   const prayerTimesDisplay = useMemo(() => {
     if (!schedule) return [];
@@ -715,6 +737,40 @@ export default function PrayerScheduleApp() {
                 <option value="medium">{t('Medium')}</option>
                 <option value="large">{t('Large')}</option>
               </select>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-slate-700 dark:text-slate-300">{t('Prayer Notifications')}</span>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={notificationSettings.timeBefore[0]}
+                  onChange={(e) => {
+                    const newTimes = [...notificationSettings.timeBefore];
+                    newTimes[0] = parseInt(e.target.value) || 5;
+                    updateNotificationSettings({...notificationSettings, timeBefore: newTimes});
+                  }}
+                  className="w-16 bg-white/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300 text-center"
+                  placeholder="5"
+                />
+                <span className="text-slate-500 dark:text-slate-500">{t('min')}</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={notificationSettings.timeBefore[1]}
+                  onChange={(e) => {
+                    const newTimes = [...notificationSettings.timeBefore];
+                    newTimes[1] = parseInt(e.target.value) || 15;
+                    updateNotificationSettings({...notificationSettings, timeBefore: newTimes});
+                  }}
+                  className="w-16 bg-white/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300 text-center"
+                  placeholder="15"
+                />
+                <span className="text-slate-500 dark:text-slate-500">{t('min')}</span>
+              </div>
             </div>
           </div>
         </motion.div>
