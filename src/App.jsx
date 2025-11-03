@@ -106,6 +106,11 @@ export default function PrayerScheduleApp() {
     enabled: true,
     timeBefore: [5, 15] // Minutes before prayer time
   });
+  const [adzanSettings, setAdzanSettings] = useState({
+    enabled: true,
+    selectedAdzan: 'makkah', // Default to Makkah
+    volume: 0.8
+  });
 
   // 🚀 Register Service Worker
   useEffect(() => {
@@ -152,6 +157,14 @@ export default function PrayerScheduleApp() {
     const savedSettings = JSON.parse(localStorage.getItem('notificationSettings') || 'null');
     if (savedSettings) {
       setNotificationSettings(savedSettings);
+    }
+  }, []);
+
+  // Load Adzan settings from localStorage
+  useEffect(() => {
+    const savedAdzanSettings = JSON.parse(localStorage.getItem('adzanSettings') || 'null');
+    if (savedAdzanSettings) {
+      setAdzanSettings(savedAdzanSettings);
     }
   }, []);
   
@@ -279,6 +292,13 @@ export default function PrayerScheduleApp() {
         'Cancel': 'Batal',
         'Delete': 'Hapus',
         'min': 'menit',
+        'Adzan': 'Adzan',
+        'Adzan Type': 'Jenis Adzan',
+        'Volume': 'Volume',
+        'Makkah': 'Makkah',
+        'Madinah': 'Madinah',
+        'Istanbul': 'Istanbul',
+        'Default': 'Default',
       },
       en: {
         'Jadwal Shalat': 'Prayer Schedule',
@@ -322,6 +342,13 @@ export default function PrayerScheduleApp() {
         'Cancel': 'Cancel',
         'Delete': 'Delete',
         'min': 'min',
+        'Adzan': 'Adhan',
+        'Adzan Type': 'Adhan Type',
+        'Volume': 'Volume',
+        'Makkah': 'Makkah',
+        'Madinah': 'Madinah',
+        'Istanbul': 'Istanbul',
+        'Default': 'Default',
       }
     };
     
@@ -525,6 +552,11 @@ export default function PrayerScheduleApp() {
             `${emoji} Sudah masuk waktu ${name} di ${cityName}`,
             `prayer-${key}-now`
           );
+
+          // Play Adzan if enabled
+          if (adzanSettings.enabled) {
+            playAdzan(adzanSettings.selectedAdzan);
+          }
         }, delay0);
         newTimeouts.push(id);
       }
@@ -640,6 +672,73 @@ export default function PrayerScheduleApp() {
     setNotificationSettings(settings);
     localStorage.setItem('notificationSettings', JSON.stringify(settings));
   }, []);
+
+  // Update Adzan settings
+  const updateAdzanSettings = useCallback((settings) => {
+    setAdzanSettings(settings);
+    localStorage.setItem('adzanSettings', JSON.stringify(settings));
+  }, []);
+
+  // Function to play Adzan
+  const playAdzan = useCallback((adzanType) => {
+    // Define Adzan audio URLs - in a real implementation, these would be actual audio files
+    const adzanUrls = {
+      makkah: "/adzan/makkah.mp3",
+      madinah: "/adzan/madinah.mp3", 
+      istanbul: "/adzan/istanbul.mp3",
+      default: "/adzan/default.mp3"
+    };
+
+    // For demonstration purposes, we'll use a default sound
+    // In a real app, we would have the actual audio files
+    const adzanUrl = adzanUrls[adzanType] || adzanUrls.default;
+    
+    // If we had actual audio files, we would use this approach:
+    try {
+      const audio = new Audio(adzanUrl);
+      audio.volume = adzanSettings.volume;
+      
+      // Add event listeners for better user experience
+      audio.oncanplaythrough = () => {
+        audio.play().catch(error => {
+          console.error("Error playing Adzan:", error);
+          // Create a simple notification as fallback
+          if (Notification.permission === "granted") {
+            new Notification("Waktu Shalat!", {
+              body: "Sudah waktunya shalat, saatnya Adzan",
+              icon: "/favicon.ico",
+              tag: "adzan-fallback"
+            });
+          }
+        });
+      };
+      
+      audio.onerror = () => {
+        console.error("Adzan audio file not found:", adzanUrl);
+        // Fallback notification if audio fails
+        if (Notification.permission === "granted") {
+          new Notification("Waktu Shalat!", {
+            body: "Sudah waktunya shalat",
+            icon: "/favicon.ico",
+            tag: "adzan-fallback"
+          });
+        }
+      };
+      
+      // Try to load the audio
+      audio.load();
+    } catch (error) {
+      console.error("Error creating Adzan audio:", error);
+      // Fallback notification
+      if (Notification.permission === "granted" && "Notification" in window) {
+        new Notification("Waktu Shalat!", {
+          body: "Sudah waktunya shalat",
+          icon: "/favicon.ico", 
+          tag: "adzan-fallback"
+        });
+      }
+    }
+  }, [adzanSettings.volume]);
 
   // Format prayer times untuk display
   const prayerTimesDisplay = useMemo(() => {
@@ -772,6 +871,59 @@ export default function PrayerScheduleApp() {
                 <span className="text-slate-500 dark:text-slate-500">{t('min')}</span>
               </div>
             </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-slate-700 dark:text-slate-300">{t('Adzan')}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const newSettings = {...adzanSettings, enabled: !adzanSettings.enabled};
+                    updateAdzanSettings(newSettings);
+                  }}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors ${adzanSettings.enabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full transition-transform ${adzanSettings.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                </button>
+              </div>
+            </div>
+            
+            {adzanSettings.enabled && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-700 dark:text-slate-300">{t('Adzan Type')}</span>
+                <select
+                  value={adzanSettings.selectedAdzan}
+                  onChange={(e) => {
+                    const newSettings = {...adzanSettings, selectedAdzan: e.target.value};
+                    updateAdzanSettings(newSettings);
+                  }}
+                  className="bg-white/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="makkah">{t('Makkah')}</option>
+                  <option value="madinah">{t('Madinah')}</option>
+                  <option value="istanbul">{t('Istanbul')}</option>
+                  <option value="default">{t('Default')}</option>
+                </select>
+              </div>
+            )}
+            
+            {adzanSettings.enabled && (
+              <div className="flex justify-between items-center">
+                <span className="text-slate-700 dark:text-slate-300">{t('Volume')}</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={adzanSettings.volume}
+                  onChange={(e) => {
+                    const newSettings = {...adzanSettings, volume: parseFloat(e.target.value)};
+                    updateAdzanSettings(newSettings);
+                  }}
+                  className="w-24 accent-indigo-500"
+                />
+                <span className="text-slate-500 dark:text-slate-500 text-sm w-8">{Math.round(adzanSettings.volume * 100)}%</span>
+              </div>
+            )}
           </div>
         </motion.div>
       )}
